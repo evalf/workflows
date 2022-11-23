@@ -1,0 +1,77 @@
+name: Test Rust
+on:
+  workflow_call:
+    inputs:
+      features:
+        description: 'Comma-separated list of features to test.'
+        type: string
+        default: ''
+        required: false
+jobs:
+  build-grcov:
+    name: 'Build grcov'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cache
+        id: cache
+        uses: actions/cache@v3
+        with:
+          key: grcov
+          path: ~/.cargo/bin/grcov
+      - name: Install Rust toolchain
+        if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          default: true
+      - name: Build
+        if: ${{ steps.cache.outputs.cache-hit != 'true' }}
+        run: cargo install grcov
+  test:
+    needs: build-grcov
+    name: 'Test Rust ${{ matrix.rust-toolchain }}'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust-toolchain: ['stable', 'beta']
+      fail-fast: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust-toolchain }}
+          # component llvm-tools-preview is needed for grcov
+          components: llvm-tools-preview
+          default: true
+      - name: Test
+        run: cargo test --features '${{ inputs.features }}'
+        env:
+          RUSTFLAGS: '-C instrument-coverage'
+          LLVM_PROFILE_FILE: 'report-%p-%m.profraw'
+      - name: Get cached grcov
+        uses: actions/cache@v3
+        with:
+          key: grcov
+          path: ~/.cargo/bin/grcov
+      - name: Convert coverage
+        run: grcov . --binary-path target/debug/deps/ -s . -t lcov --branch --ignore-not-existing --ignore '../**' --ignore '/*' -o coverage.lcov
+      - name: Upload coverage to codecov.io
+        uses: codecov/codecov-action@v3
+        with:
+          verbose: true
+          fail_ci_if_error: true
+  check-fmt:
+    name: Check formatting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          default: true
+      - name: Check formatting
+        run: cargo fmt --all --check

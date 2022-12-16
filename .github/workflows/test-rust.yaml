@@ -20,10 +20,7 @@ jobs:
           path: ~/.cargo/bin/grcov
       - name: Install Rust toolchain
         if: ${{ steps.cache.outputs.cache-hit != 'true' }}
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          default: true
+        uses: dtolnay/rust-toolchain@stable
       - name: Build
         if: ${{ steps.cache.outputs.cache-hit != 'true' }}
         run: cargo install grcov
@@ -39,12 +36,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust-toolchain }}
           # component llvm-tools-preview is needed for grcov
           components: llvm-tools-preview
-          default: true
       - name: Test
         run: cargo test --features '${{ inputs.features }}'
         env:
@@ -69,9 +65,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          default: true
+        uses: dtolnay/rust-toolchain@stable
       - name: Check formatting
         run: cargo fmt --all --check

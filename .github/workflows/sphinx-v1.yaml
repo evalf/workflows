@@ -7,10 +7,30 @@ on:
         type: string
         required: false
         default: 'docs'
+      install-from-dist:
+        description: 'Install the target using a pre-built wheel from the "dist" artifact.'
+        type: boolean
+        required: false
+        default: false
+      install-extras:
+        description: 'Comma-separated list of extras to include when installing the target.'
+        type: string
+        required: false
+        default: ''
+      required-packages:
+        description: 'Space separated list of packages required to build the documentation.'
+        type: string
+        required: false
+        default: ''
 jobs:
   build-docs:
     name: Build documentation
     runs-on: ubuntu-latest
+    env:
+      source: ${{ inputs.source }}
+      install_from_dist: ${{ inputs.install_from_dist }}
+      install_extras: ${{ inputs.install_extras }}
+      required_packages: ${{ inputs.required-packages }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -18,14 +38,29 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      - uses: actions/download-artifact@v3
+      - if: ${{ inputs.install-from-dist }}
+        name: Download dist
+        uses: actions/download-artifact@v3
         with:
           name: dist
           path: target/wheels
-      - name: Install package and Sphinx
-        run: python -m pip install --find-links=target/wheels . sphinx
+      - name: Install packages
+        shell: python
+        run: |
+          import os, pathlib, subprocess, sys
+          if os.environ['install_from_dist'] == 'true':
+              wheel, = (pathlib.Path()/'target'/'wheels').glob('*-abi3-*manylinux*_x86_64.whl')
+              print(f'found wheel: {wheel}')
+              package = str(wheel)
+          else:
+              package = '.'
+          extras = os.environ.get('install_extras', '')
+          if extras:
+              package += f'[{extras}]'
+          requirements = tuple(filter(None, os.environ.get('required_packages', '').split(' ')))
+          subprocess.check_call([sys.executable, '-m', 'pip', 'install', package, 'sphinx', 'sphinx-rtd-theme', *requirements])
       - name: Build documentation
-        run: python -m sphinx ${{ inputs.source }} target/sphinx
+        run: python -m sphinx -n -b dirhtml -D html-theme=sphinx_rtd_theme "$source" target/sphinx
       - name: Upload documentation
         uses: actions/upload-artifact@v3
         with:
